@@ -71,3 +71,53 @@ def reconcile_companies(crm_companies, event_companies):
     }
 
     return output
+
+def extract_pending_companies(api_response):
+    pending_companies=[]
+    for company in api_response["data"]["companies"]:
+        if company["registration"]["status"]=="pending":
+                output={"company_id": company["id"],
+                "company_name":company["name"],
+                "status": company["registration"]["status"],
+                "email":company.get("contact", {}).get("email")
+                }
+                pending_companies.append(output)
+    return pending_companies
+
+def process_crm_response(status_code, response_body):
+
+    if status_code == 200:
+        return extract_pending_companies(response_body)
+
+    elif status_code == 401:
+        raise PermissionError("CRM authentication failed")
+
+    elif status_code == 500:
+        raise RuntimeError("CRM server error")
+    else:
+        raise ValueError(f"Unexpected HTTP status: {status_code}")
+
+def combine_paginated_companies(pages):
+    all_companies = []
+
+    for page in pages:
+        page_companies= page["data"]["companies"]
+        all_companies.extend(page_companies)
+
+    return all_companies
+
+def find_missing_pages(pages):
+
+    received_pages = set()
+
+    for page in pages:
+        page_number=page["pagination"]["page"]
+        received_pages.add(page_number)
+
+    total_pages = pages[0]["pagination"]["total_pages"]
+
+    expected_pages = set(range(1, total_pages + 1))
+
+    number_of_pages=expected_pages-received_pages
+
+    return sorted(number_of_pages)
